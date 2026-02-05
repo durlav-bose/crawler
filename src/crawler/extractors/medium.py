@@ -5,7 +5,7 @@ import logging
 from bs4 import BeautifulSoup
 
 from crawler.extractors.base import BaseExtractor, ExtractedDocument
-from crawler.fetchers.http import HttpFetcher
+from crawler.fetchers.browser import BrowserFetcher
 
 logger = logging.getLogger(__name__)
 
@@ -15,15 +15,18 @@ class MediumExtractor(BaseExtractor):
     Extracts:
     - title
     - article text (best-effort)
+    Uses browser-based fetching to bypass Medium's bot protection.
     """
 
-    def __init__(self, fetcher: HttpFetcher) -> None:
+    def __init__(self, fetcher: BrowserFetcher) -> None:
         self._fetcher = fetcher
 
     async def extract(self, link: str, **kwargs) -> ExtractedDocument:
+        # Use browser fetcher to bypass bot detection
         resp = await self._fetcher.fetch_text(link)
 
         if resp.status >= 400:
+            logger.error(f"Medium returned {resp.status} for {link}.")
             raise RuntimeError(f"Medium fetch failed: status={resp.status} url={resp.url}")
 
         soup = BeautifulSoup(resp.text, "lxml")

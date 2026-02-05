@@ -32,11 +32,19 @@ class HttpFetcher:
         self,
         *,
         timeout_seconds: int = 25,
-        user_agent: str = "crawler/0.1 (+https://example.com)",
+        user_agent: str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         max_concurrency: int = 10,
     ) -> None:
         self._timeout = aiohttp.ClientTimeout(total=timeout_seconds)
-        self._headers = {"User-Agent": user_agent, "Accept": "text/html,*/*"}
+        self._headers = {
+            "User-Agent": user_agent,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+        }
         self._session: Optional[aiohttp.ClientSession] = None
         self._sem = asyncio.Semaphore(max_concurrency)
 
@@ -60,16 +68,19 @@ class HttpFetcher:
         wait=wait_exponential(multiplier=0.6, min=0.6, max=6),
         retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
     )
-    async def fetch_text(self, url: str) -> HttpResponse:
+    async def fetch_text(self, url: str, extra_headers: dict | None = None) -> HttpResponse:
         """
         Fetch URL and return raw text (usually HTML).
         Retries on transient network errors.
         """
         session = self._require_session()
+        headers = {**self._headers}
+        if extra_headers:
+            headers.update(extra_headers)
 
         async with self._sem:
             logger.debug("HTTP GET %s", url)
-            async with session.get(url, allow_redirects=True) as resp:
+            async with session.get(url, headers=headers, allow_redirects=True) as resp:
                 content_type = resp.headers.get("Content-Type")
                 text = await resp.text(errors="ignore")
                 return HttpResponse(
